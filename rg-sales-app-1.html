@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+  <meta name="theme-color" content="#0a0c12"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="RG Sales"/>
+  <title>RG Sales</title>
+
+  <!-- PWA Manifest inline -->
+  <script>
+    const manifestData = {
+      name: "RG Sales Tracker",
+      short_name: "RG Sales",
+      description: "Daily business sales tracker with AI agent Aria",
+      start_url: "./",
+      display: "standalone",
+      background_color: "#0a0c12",
+      theme_color: "#0a0c12",
+      orientation: "portrait",
+      icons: [
+        { src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' fill='%230a0c12' rx='32'/%3E%3Ctext x='96' y='130' font-size='100' text-anchor='middle' fill='%23e2c97e' font-family='system-ui'%3E₹%3C/text%3E%3C/svg%3E", sizes: "192x192", type: "image/svg+xml" },
+        { src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' fill='%230a0c12' rx='80'/%3E%3Ctext x='256' y='340' font-size='280' text-anchor='middle' fill='%23e2c97e' font-family='system-ui'%3E₹%3C/text%3E%3C/svg%3E", sizes: "512x512", type: "image/svg+xml" }
+      ]
+    };
+    const blob = new Blob([JSON.stringify(manifestData)], {type:'application/json'});
+    const manifestURL = URL.createObjectURL(blob);
+    document.write('<link rel="manifest" href="' + manifestURL + '">');
+  </script>
+
+  <!-- Chart.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0c12;
+      --bg2: #111420;
+      --border: #1e2130;
+      --border2: #2a2d3a;
+      --gold: #e2c97e;
+      --text: #e8eaf0;
+      --muted: #555970;
+      --bubble-user: #1a2540;
+      --bubble-bot: #111420;
+    }
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, -apple-system, sans-serif; overflow: hidden; }
+    #app { display: flex; flex-direction: column; height: 100dvh; max-width: 480px; margin: 0 auto; }
+
+    /* ── Header ── */
+    .header { padding: 48px 20px 14px; border-bottom: 1px solid var(--border); }
+    .brand { font-size: 22px; font-weight: 800; color: var(--gold); letter-spacing: -0.5px; }
+    .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    /* ── Stats ── */
+    .stats-row { display: flex; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .stat-card { flex: 1; background: var(--bg2); border-radius: 10px; padding: 10px 12px; border: 1px solid var(--border); }
+    .stat-val { font-size: 15px; font-weight: 700; color: var(--gold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .stat-label { font-size: 9px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* ── Tabs ── */
+    .tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .tab-btn { flex: 1; padding: 12px 0; font-size: 12px; font-weight: 500; color: var(--muted); background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; transition: color 0.2s, border-color 0.2s; -webkit-tap-highlight-color: transparent; }
+    .tab-btn.active { color: var(--gold); font-weight: 600; border-bottom-color: var(--gold); }
+
+    /* ── Body ── */
+    .body { flex: 1; overflow-y: auto; padding: 16px 20px; -webkit-overflow-scrolling: touch; }
+    .pane { display: none; }
+    .pane.active { display: block; }
+
+    /* ── Chat ── */
+    #chat-pane { display: flex; flex-direction: column; gap: 10px; }
+    .bubble { max-width: 85%; padding: 10px 14px; font-size: 13.5px; line-height: 1.6; color: #d8dae8; border-radius: 16px; word-break: break-word; }
+    .bubble.user { margin-left: auto; background: var(--bubble-user); border: 1px solid #1e3060; border-radius: 16px 16px 4px 16px; }
+    .bubble.bot { margin-right: auto; background: var(--bubble-bot); border: 1px solid var(--border); border-radius: 16px 16px 16px 4px; }
+    .bubble.thinking { color: var(--muted); font-style: italic; }
+    .chat-input-row { display: flex; gap: 8px; padding: 12px 20px 24px; border-top: 1px solid var(--border); flex-shrink: 0; background: var(--bg); }
+    #chat-input { flex: 1; background: var(--bg2); border: 1px solid var(--border2); border-radius: 10px; padding: 10px 14px; font-size: 13.5px; color: var(--text); outline: none; font-family: inherit; }
+    #chat-input::placeholder { color: var(--muted); }
+
+    /* ── Buttons ── */
+    .btn-gold { background: var(--gold); color: #0a0c12; border: none; border-radius: 10px; padding: 10px 18px; font-size: 13px; font-weight: 700; cursor: pointer; -webkit-tap-highlight-color: transparent; white-space: nowrap; font-family: inherit; }
+    .btn-gold:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-gold.full { width: 100%; padding: 13px; font-size: 14px; margin-top: 4px; }
+
+    /* ── Add Form ── */
+    .form-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 18px; }
+    .form-title { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+    .form-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px; }
+    .form-input { width: 100%; background: var(--bg); border: 1px solid var(--border2); border-radius: 8px; padding: 11px 12px; font-size: 14px; color: var(--text); outline: none; margin-bottom: 14px; font-family: inherit; -webkit-appearance: none; }
+    .form-input:focus { border-color: var(--gold); }
+    .form-input::placeholder { color: var(--muted); }
+
+    /* ── Chart ── */
+    .chart-wrap { position: relative; width: 100%; height: 260px; margin-bottom: 16px; }
+    .chart-meta { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+    .chart-stats { display: flex; gap: 10px; margin-top: 4px; }
+    .chart-stats .stat-card { flex: 1; }
+    .no-data { color: var(--muted); font-size: 13px; text-align: center; margin-top: 60px; }
+
+    /* ── Log ── */
+    .log-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #1a1d2a; }
+    .log-date { font-size: 12px; color: var(--muted); }
+    .log-amt { font-size: 15px; font-weight: 700; color: var(--gold); margin-top: 2px; }
+    .log-note { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .del-btn { background: none; border: none; color: #3a3d52; cursor: pointer; font-size: 16px; padding: 6px 10px; -webkit-tap-highlight-color: transparent; flex-shrink: 0; }
+
+    /* ── Install Banner ── */
+    #install-banner { display: none; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 20px; background: #161a28; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text); }
+    #install-banner button { background: var(--gold); color: #0a0c12; border: none; border-radius: 8px; padding: 7px 14px; font-size: 12px; font-weight: 700; cursor: pointer; flex-shrink: 0; font-family: inherit; }
+    #install-close { background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 0 4px; flex-shrink: 0; }
+
+    /* ── Loading splash ── */
+    #splash { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px; z-index: 100; }
+    #splash .logo { font-size: 48px; font-weight: 800; color: var(--gold); }
+    #splash .tagline { font-size: 13px; color: var(--muted); }
+
+    /* Safe area for notch phones */
+    .header { padding-top: max(48px, calc(env(safe-area-inset-top) + 16px)); }
+    .chat-input-row { padding-bottom: max(24px, calc(env(safe-area-inset-bottom) + 12px)); }
+
+    /* API key gate */
+    #api-gate { padding: 24px 20px; }
+    .gate-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+    .gate-title { font-size: 16px; font-weight: 700; margin-bottom: 8px; color: var(--gold); }
+    .gate-desc { font-size: 13px; color: var(--muted); line-height: 1.6; margin-bottom: 16px; }
+    .gate-link { color: var(--gold); text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+<!-- Splash -->
+<div id="splash">
+  <div class="logo">RG</div>
+  <div class="tagline">Loading Sales Tracker...</div>
+</div>
+
+<div id="app" style="display:none">
+
+  <!-- Install Banner -->
+  <div id="install-banner">
+    <span>📲 Add RG Sales to your home screen</span>
+    <button id="install-btn">Install</button>
+    <button id="install-close">✕</button>
+  </div>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="brand">RG Sales</div>
+    <div class="sub">Daily Tracker · Powered by Aria AI</div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-val" id="stat-today">₹0</div>
+      <div class="stat-label">Today</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" id="stat-week">₹0</div>
+      <div class="stat-label">Last 7 Days</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" id="stat-avg">₹0</div>
+      <div class="stat-label">Daily Avg</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="chat">💬 Aria</button>
+    <button class="tab-btn" data-tab="add">＋ Add</button>
+    <button class="tab-btn" data-tab="chart">📈 Chart</button>
+    <button class="tab-btn" data-tab="log">📋 Log</button>
+  </div>
+
+  <!-- Body -->
+  <div class="body" id="body-scroll">
+
+    <!-- Chat Pane -->
+    <div id="chat-pane" class="pane active" style="display:flex;flex-direction:column;gap:10px;min-height:100%">
+      <div id="chat-messages"></div>
+      <div id="chat-anchor"></div>
+    </div>
+
+    <!-- Add Pane -->
+    <div id="add-pane" class="pane">
+      <div class="form-card">
+        <div class="form-title">Record a Sale</div>
+        <label class="form-label">Date</label>
+        <input class="form-input" type="date" id="sale-date"/>
+        <label class="form-label">Amount (₹)</label>
+        <input class="form-input" type="number" id="sale-amount" placeholder="e.g. 12500" inputmode="numeric"/>
+        <label class="form-label">Note (optional)</label>
+        <input class="form-input" type="text" id="sale-note" placeholder="e.g. Weekend rush, discount sale..."/>
+        <button class="btn-gold full" id="add-btn">Save & Get Insight</button>
+      </div>
+    </div>
+
+    <!-- Chart Pane -->
+    <div id="chart-pane" class="pane">
+      <div class="chart-meta" id="chart-meta">Last 30 days · Linear trend</div>
+      <div class="chart-wrap">
+        <canvas id="sales-chart"></canvas>
+      </div>
+      <div class="chart-stats" id="chart-stats" style="display:none">
+        <div class="stat-card">
+          <div class="stat-val" id="cs-best">₹0</div>
+          <div class="stat-label">Best Day</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="cs-low">₹0</div>
+          <div class="stat-label">Lowest Day</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="cs-total">₹0</div>
+          <div class="stat-label">All Time</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Log Pane -->
+    <div id="log-pane" class="pane">
+      <div id="log-list"></div>
+    </div>
+
+  </div><!-- /body -->
+
+  <!-- Chat Input (shown only on chat tab) -->
+  <div class="chat-input-row" id="chat-input-row">
+    <input id="chat-input" type="text" placeholder="Ask Aria anything..."/>
+    <button class="btn-gold" id="send-btn">Send</button>
+  </div>
+
+</div><!-- /app -->
+
+<script>
+// ─────────────────────────────────────────────
+// CONFIG — paste your Anthropic API key below
+// Get one free at: https://console.anthropic.com
+// ─────────────────────────────────────────────
+const API_KEY = localStorage.getItem('rg_api_key') || '';
+
+// ── State ──────────────────────────────────────
+let sales = [];
+let chatHistory = [];
+let isLoading = false;
+let chartInstance = null;
+let currentTab = 'chat';
+let deferredPrompt = null;
+
+// ── Storage ────────────────────────────────────
+function loadData() {
+  try { sales = JSON.parse(localStorage.getItem('rg_sales') || '[]'); } catch { sales = []; }
+  try { chatHistory = JSON.parse(localStorage.getItem('rg_chat') || '[]'); } catch { chatHistory = []; }
+}
+function saveSales() { localStorage.setItem('rg_sales', JSON.stringify(sales)); }
+function saveChat() { localStorage.setItem('rg_chat', JSON.stringify(chatHistory.slice(-40))); }
+
+// ── Helpers ────────────────────────────────────
+function todayStr() { return new Date().toISOString().split('T')[0]; }
+function fmt(n) { return '₹' + Number(n).toLocaleString('en-IN'); }
+function shortDate(d) {
+  const [,m,dd] = d.split('-');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${parseInt(dd)} ${months[parseInt(m)-1]}`;
+}
+
+// ── Stats ──────────────────────────────────────
+function updateStats() {
+  const t = todayStr();
+  const todaySale = sales.find(s => s.date === t);
+  const last7 = sales.filter(s => {
+    const d = new Date(s.date), cutoff = new Date(); cutoff.setDate(cutoff.getDate()-7);
+    return d >= cutoff;
+  });
+  const total = sales.reduce((a,b) => a+b.amount, 0);
+  const avg = sales.length ? Math.round(total/sales.length) : 0;
+  document.getElementById('stat-today').textContent = fmt(todaySale?.amount ?? 0);
+  document.getElementById('stat-week').textContent = fmt(last7.reduce((a,b)=>a+b.amount,0));
+  document.getElementById('stat-avg').textContent = fmt(avg);
+}
+
+// ── Chart ──────────────────────────────────────
+function renderChart() {
+  const data = sales.slice(-30);
+  const meta = document.getElementById('chart-meta');
+  const statsEl = document.getElementById('chart-stats');
+  if (data.length < 2) {
+    meta.textContent = 'Add at least 2 days to see the chart.';
+    statsEl.style.display = 'none';
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+    return;
+  }
+  const total = sales.reduce((a,b)=>a+b.amount,0);
+  const avg = Math.round(total/sales.length);
+  meta.textContent = `Last ${data.length} days · Linear trend`;
+
+  const labels = data.map(d => shortDate(d.date));
+  const values = data.map(d => d.amount);
+
+  if (chartInstance) chartInstance.destroy();
+  const ctx = document.getElementById('sales-chart').getContext('2d');
+  chartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        borderColor: '#e2c97e',
+        borderWidth: 2,
+        pointBackgroundColor: '#e2c97e',
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        pointHoverBackgroundColor: '#fff',
+        tension: 0,
+        fill: {
+          target: 'origin',
+          above: 'rgba(226,201,126,0.06)'
+        }
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 400 },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#0f1117',
+          borderColor: '#2a2d3a',
+          borderWidth: 1,
+          titleColor: '#8b8fa8',
+          bodyColor: '#e2c97e',
+          bodyFont: { size: 15, weight: 'bold' },
+          callbacks: {
+            label: ctx => fmt(ctx.raw),
+            title: items => items[0].label
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: '#1a1d2a' },
+          ticks: { color: '#555970', font: { size: 10 }, maxRotation: 45 },
+          border: { color: '#1e2130' }
+        },
+        y: {
+          grid: { color: '#1a1d2a' },
+          ticks: { color: '#555970', font: { size: 10 }, callback: v => `₹${(v/1000).toFixed(0)}k` },
+          border: { display: false }
+        }
+      }
+    },
+    plugins: [{
+      id: 'avgLine',
+      afterDraw(chart) {
+        const { ctx, chartArea: { left, right }, scales: { y } } = chart;
+        const yPos = y.getPixelForValue(avg);
+        ctx.save();
+        ctx.strokeStyle = '#2a3a5a';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4,4]);
+        ctx.beginPath(); ctx.moveTo(left, yPos); ctx.lineTo(right, yPos); ctx.stroke();
+        ctx.fillStyle = '#555970'; ctx.font = '10px Inter,system-ui'; ctx.textAlign = 'right';
+        ctx.fillText('Avg', right, yPos - 4);
+        ctx.restore();
+      }
+    }]
+  });
+
+  document.getElementById('cs-best').textContent = fmt(Math.max(...sales.map(s=>s.amount)));
+  document.getElementById('cs-low').textContent = fmt(Math.min(...sales.map(s=>s.amount)));
+  document.getElementById('cs-total').textContent = fmt(total);
+  statsEl.style.display = 'flex';
+}
+
+// ── Log ────────────────────────────────────────
+function renderLog() {
+  const el = document.getElementById('log-list');
+  if (!sales.length) {
+    el.innerHTML = '<div class="no-data">No sales yet. Tap ＋ Add to get started.</div>';
+    return;
+  }
+  el.innerHTML = [...sales].reverse().map(entry => `
+    <div class="log-item">
+      <div>
+        <div class="log-date">${shortDate(entry.date)}${entry.date===todayStr()?' · Today':''}</div>
+        <div class="log-amt">${fmt(entry.amount)}</div>
+        ${entry.note ? `<div class="log-note">${entry.note}</div>` : ''}
+      </div>
+      <button class="del-btn" onclick="deleteSale(${entry.id})">✕</button>
+    </div>
+  `).join('');
+}
+window.deleteSale = async function(id) {
+  sales = sales.filter(s => s.id !== id);
+  saveSales(); updateStats(); renderLog(); renderChart();
+};
+
+// ── Chat ───────────────────────────────────────
+function renderMessages() {
+  const el = document.getElementById('chat-messages');
+  el.innerHTML = chatHistory.map(m => `
+    <div class="bubble ${m.role==='user'?'user':'bot'}">${m.content.replace(/\n/g,'<br>')}</div>
+  `).join('');
+  document.getElementById('chat-anchor').scrollIntoView({ behavior: 'smooth' });
+}
+
+function addThinking() {
+  const el = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = 'bubble bot thinking';
+  div.id = 'thinking-bubble';
+  div.textContent = 'Aria is thinking...';
+  el.appendChild(div);
+  document.getElementById('chat-anchor').scrollIntoView({ behavior: 'smooth' });
+}
+function removeThinking() {
+  document.getElementById('thinking-bubble')?.remove();
+}
+
+async function callAria(userContent) {
+  if (isLoading) return;
+  isLoading = true;
+  document.getElementById('send-btn').disabled = true;
+  document.getElementById('add-btn').disabled = true;
+
+  chatHistory.push({ role: 'user', content: userContent });
+  renderMessages();
+  addThinking();
+
+  const total = sales.reduce((a,b)=>a+b.amount,0);
+  const avg = sales.length ? Math.round(total/sales.length) : 0;
+  const systemPrompt = `You are Aria, the AI sales agent for RG — a retail clothing store. You help the owner track daily sales, spot trends, and give actionable business insights.
+
+Current sales data (most recent first):
+${sales.length===0 ? 'No sales recorded yet.' : [...sales].slice(-30).reverse().map(d=>`${d.date}: ₹${d.amount.toLocaleString('en-IN')}${d.note?` — ${d.note}`:''}`).join('\n')}
+
+Total entries: ${sales.length}
+${sales.length>0?`Total revenue: ₹${total.toLocaleString('en-IN')}`:''}
+${sales.length>0?`Average daily: ₹${avg.toLocaleString('en-IN')}`:''}
+
+Rules:
+- Be concise, direct, mobile-friendly (short paragraphs).
+- Use ₹ and Indian number formatting.
+- Give concrete, actionable advice — not generic tips.
+- Speak like a sharp business advisor, not a chatbot.`;
+
+  const key = localStorage.getItem('rg_api_key');
+  if (!key) {
+    removeThinking();
+    const reply = "⚠️ No API key set. Tap the ⚙️ button in the header to add your Anthropic API key so Aria can work.";
+    chatHistory.push({ role: 'assistant', content: reply });
+    saveChat(); renderMessages(); isLoading = false;
+    document.getElementById('send-btn').disabled = false;
+    document.getElementById('add-btn').disabled = false;
+    return;
+  }
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        system: systemPrompt,
+        messages: chatHistory.map(m=>({role:m.role,content:m.content}))
+      })
+    });
+    const data = await res.json();
+    const reply = data.content?.[0]?.text ?? 'Something went wrong. Try again.';
+    removeThinking();
+    chatHistory.push({ role: 'assistant', content: reply });
+  } catch(e) {
+    removeThinking();
+    chatHistory.push({ role: 'assistant', content: '⚠️ Network error. Check your connection and try again.' });
+  }
+
+  saveChat(); renderMessages(); isLoading = false;
+  document.getElementById('send-btn').disabled = false;
+  document.getElementById('add-btn').disabled = false;
+}
+
+// ── Add Sale ───────────────────────────────────
+document.getElementById('add-btn').addEventListener('click', async () => {
+  const amt = parseFloat(document.getElementById('sale-amount').value);
+  const date = document.getElementById('sale-date').value;
+  const note = document.getElementById('sale-note').value.trim();
+  if (!amt || isNaN(amt) || amt <= 0 || !date) return;
+
+  const entry = { id: Date.now(), date, amount: amt, note };
+  sales = [...sales.filter(s => !(s.date===date)), entry].sort((a,b)=>a.date.localeCompare(b.date));
+  saveSales(); updateStats(); renderLog(); renderChart();
+
+  document.getElementById('sale-amount').value = '';
+  document.getElementById('sale-note').value = '';
+  document.getElementById('sale-date').value = todayStr();
+
+  switchTab('chat');
+  await callAria(`I just recorded sales of ₹${amt.toLocaleString('en-IN')} for ${date}${note?` (${note})`:''}.`);
+});
+
+// ── Send Chat ──────────────────────────────────
+document.getElementById('send-btn').addEventListener('click', sendChat);
+document.getElementById('chat-input').addEventListener('keydown', e => { if(e.key==='Enter') sendChat(); });
+async function sendChat() {
+  const val = document.getElementById('chat-input').value.trim();
+  if (!val || isLoading) return;
+  document.getElementById('chat-input').value = '';
+  await callAria(val);
+}
+
+// ── Tabs ───────────────────────────────────────
+function switchTab(name) {
+  currentTab = name;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab===name));
+  document.querySelectorAll('.pane').forEach(p => {
+    const isActive = p.id === name+'-pane';
+    p.classList.toggle('active', isActive);
+    p.style.display = isActive ? (name==='chat'?'flex':'block') : 'none';
+  });
+  document.getElementById('chat-input-row').style.display = name==='chat' ? 'flex' : 'none';
+  if (name==='chart') renderChart();
+  if (name==='log') renderLog();
+  document.getElementById('body-scroll').scrollTop = 0;
+}
+document.querySelectorAll('.tab-btn').forEach(b => {
+  b.addEventListener('click', () => switchTab(b.dataset.tab));
+});
+
+// ── API Key Setup ──────────────────────────────
+function checkApiKey() {
+  const key = localStorage.getItem('rg_api_key');
+  if (!key && chatHistory.length <= 1) {
+    setTimeout(() => {
+      const k = prompt('Enter your Anthropic API key to activate Aria AI.\n\nGet one free at: console.anthropic.com\n\nYour key stays on your device only.');
+      if (k && k.trim().startsWith('sk-')) {
+        localStorage.setItem('rg_api_key', k.trim());
+        callAria("Hey Aria, I just set up the app. Give me a quick intro.");
+      }
+    }, 1200);
+  }
+}
+
+// ── PWA Install ────────────────────────────────
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('install-banner').style.display = 'flex';
+});
+document.getElementById('install-btn').addEventListener('click', async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const result = await deferredPrompt.userChoice;
+  deferredPrompt = null;
+  document.getElementById('install-banner').style.display = 'none';
+});
+document.getElementById('install-close').addEventListener('click', () => {
+  document.getElementById('install-banner').style.display = 'none';
+});
+window.addEventListener('appinstalled', () => {
+  document.getElementById('install-banner').style.display = 'none';
+});
+
+// ── Service Worker (offline support) ──────────
+if ('serviceWorker' in navigator) {
+  const swCode = `
+    const CACHE = 'rg-sales-v1';
+    self.addEventListener('install', e => {
+      e.waitUntil(caches.open(CACHE).then(c => c.addAll(['./', './index.html'])));
+      self.skipWaiting();
+    });
+    self.addEventListener('activate', e => {
+      e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));
+      self.clients.claim();
+    });
+    self.addEventListener('fetch', e => {
+      if (e.request.url.includes('anthropic.com')) return;
+      e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).catch(() => caches.match('./'))));
+    });
+  `;
+  const swBlob = new Blob([swCode], { type: 'application/javascript' });
+  const swURL = URL.createObjectURL(swBlob);
+  navigator.serviceWorker.register(swURL).catch(() => {});
+}
+
+// ── Init ───────────────────────────────────────
+loadData();
+
+// Set today's date in form
+document.getElementById('sale-date').value = todayStr();
+
+// Welcome message if fresh
+if (chatHistory.length === 0) {
+  chatHistory.push({
+    role: 'assistant',
+    content: "Hey! I'm Aria, your RG sales agent 👋\n\nAdd today's sales using ＋ Add, then ask me anything — trends, targets, best days, advice.\n\nFirst time? I'll ask for your API key so I can come alive."
+  });
+  saveChat();
+}
+
+updateStats();
+renderMessages();
+
+// Hide splash and show app
+setTimeout(() => {
+  document.getElementById('splash').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  checkApiKey();
+}, 600);
+</script>
+</body>
+</html>
